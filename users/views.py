@@ -30,7 +30,6 @@ class UserProfileView(APIView):
 
     def get(self, request):
         user = request.user
-        print(f"Authenticated User: {user}")  # 添加日志查看 user 对象
         return Response({
             'username': user.username,
             'email': user.email,
