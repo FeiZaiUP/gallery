@@ -3,6 +3,8 @@ from django.shortcuts import render
 # Create your views here.
 from django.utils import timezone
 from datetime import timedelta
+from datetime import datetime
+from django.utils.timezone import make_aware
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.views import APIView
@@ -53,7 +55,7 @@ class ImageUploadView(APIView):
     def post(self, request):
         # 仅接受 title 和 file、tags 字段上传
 
-        # 获取标签ID列表
+        # 获取标签ID列表，如果未提供则默认为空
         tags = request.data.get('tags', [])
         # 确保 tags 是一个列表，即使前端传递多个值
         if isinstance(tags, str):  # 如果是字符串（JSON字符串）
@@ -63,16 +65,21 @@ class ImageUploadView(APIView):
                 return Response({'detail': '标签格式无效。'}, status=status.HTTP_400_BAD_REQUEST)
 
         if isinstance(tags, list):  # 如果是列表
-            tags = [int(tag) for tag in tags]  # 确保列表里的标签是整数类型
+            try:
+                tags = [int(tag) for tag in tags]  # 确保列表里的标签是整数类型
+            except ValueError:
+                return Response({'detail': '标签列表中的值必须为整数。'}, status=status.HTTP_400_BAD_REQUEST)
         elif isinstance(tags, int):  # 如果是单个整数
             tags = [tags]  # 转换为列表
+        else:
+            return Response({'detail': '标签格式无效，应为整数或整数列表。'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 确保 tags 是有效的整数列表
-        if not all(isinstance(tag, int) for tag in tags):
-            return Response({'detail': 'Tags should be a list of integers.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not tags:
-            return Response({'detail': 'At least one tag is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        # 如果提供了 tags，验证是否是有效的标签ID
+        if tags:
+            user_tags = Tag.objects.filter(uploaded_by=request.user)  # 获取当前用户的标签
+            valid_tags = user_tags.filter(id__in=tags)  # 确保标签是用户创建的
+        else:
+            valid_tags = []  # 如果未提供 tags，则设置为空列表
 
         serializer = ImageSerializer(data=request.data)
         if serializer.is_valid():
@@ -210,11 +217,22 @@ class CreateShareLinkView(APIView):
         if images.count() != len(image_ids):
             return Response({"detail": "未找到一张或多张图像。"}, status=status.HTTP_404_NOT_FOUND)
 
+        # 检查 expire_time 格式
+        expire_time = request.data.get('expire_time', None)
+        if expire_time:
+            try:
+                expire_time = make_aware(datetime.fromisoformat(expire_time))
+                if expire_time <= datetime.now():
+                    return Response({"detail": "过期时间必须大于当前时间。"}, status=status.HTTP_400_BAD_REQUEST)
+            except ValueError:
+                return Response({"detail": "无效的时间格式，应为 ISO 格式。"}, status=status.HTTP_400_BAD_REQUEST)
+
         # 序列化并保存
         serializer = ShareLinkSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()  # 保存并创建ShareLink
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        print(serializer.errors)  # 打印错误信息
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

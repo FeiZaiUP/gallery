@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import UserTagListView,BulkDeleteImagesView ,ImageUploadView, UserImageListView, ImageDetailView, ImageEditView, CreateShareLinkView, AccessShareLinkView, ManageShareLinksView
+from .views import UserTagListView, BulkDeleteImagesView, ImageUploadView, UserImageListView, ImageDetailView, \
+    ImageEditView, CreateShareLinkView, AccessShareLinkView, ManageShareLinksView
 
 urlpatterns = [
     path('images/', UserImageListView.as_view(), name='user-images'),
