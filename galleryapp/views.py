@@ -251,20 +251,29 @@ class AccessShareLinkView(APIView):
         if share_link.is_expired():
             raise PermissionDenied("This share link has expired.")
 
-        # 如果受保护，检查密码
+            # 打印请求中的密码
+        print("Received password:", request.query_params.get('password'))
+
+        # 如果分享链接有密码保护
         if share_link.is_protected:
+            # 获取请求中的密码参数
             password = request.query_params.get('password', '')
+            # 校验密码
             if share_link.password != password:
+                print(f"Password mismatch: expected {share_link.password}, got {password}")
                 raise PermissionDenied("Incorrect password.")
 
         # 获取关联图片并序列化返回
         images = share_link.images.all()
         serializer = ImageSerializer(images, many=True)
 
+        # 添加密码保护字段
         return Response({
             "share_code": share_code,
             "images": serializer.data,
-            "expire_time": share_link.expire_time
+            "expire_time": share_link.expire_time,
+            "is_protected": share_link.is_protected,  # 返回是否受保护字段
+
         })
 
 
