@@ -39,7 +39,7 @@ class ShareLink(models.Model):
     share_code = models.CharField(max_length=64, unique=True, default=uuid.uuid4().hex)
     is_protected = models.BooleanField(default=False)
     password = models.CharField(max_length=128, blank=True, null=True)  # 可选的保护密码
-    expire_time = models.DateTimeField(default=default_expire_time)  # 默认1天有效
+    expire_time = models.DateTimeField()  # 默认1天有效
 
     def is_expired(self):
         return timezone.now() > self.expire_time

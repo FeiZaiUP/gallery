@@ -4,6 +4,7 @@ from django.shortcuts import render
 from django.utils import timezone
 from datetime import timedelta
 from datetime import datetime
+from django.utils.timezone import now
 from django.utils.timezone import make_aware
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -21,6 +22,9 @@ from .serializers import ImageSerializer, ImageDetailSerializer, ShareLinkSerial
 import uuid
 import logging
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class CustomPagination(PageNumberPagination):
@@ -206,7 +210,11 @@ class ImageEditView(APIView):
 # 分享链接生成
 
 class CreateShareLinkView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
+        print("Received data:", request.data)  # 打印前端发送的数据
+
         # 确保请求中有图片ID列表
         image_ids = request.data.get('images', [])
         if not image_ids:
@@ -217,23 +225,44 @@ class CreateShareLinkView(APIView):
         if images.count() != len(image_ids):
             return Response({"detail": "未找到一张或多张图像。"}, status=status.HTTP_404_NOT_FOUND)
 
-        # 检查 expire_time 格式
-        expire_time = request.data.get('expire_time', None)
-        if expire_time:
+        # 处理过期时间
+        expire_time = None
+        expire_duration = request.data.get('expire_duration', None)  # 获取过期时长（分钟）
+        if expire_duration:
             try:
-                expire_time = make_aware(datetime.fromisoformat(expire_time))
-                if expire_time <= datetime.now():
-                    return Response({"detail": "过期时间必须大于当前时间。"}, status=status.HTTP_400_BAD_REQUEST)
-            except ValueError:
-                return Response({"detail": "无效的时间格式，应为 ISO 格式。"}, status=status.HTTP_400_BAD_REQUEST)
+                expire_duration = int(expire_duration)
+                if expire_duration <= 0:
+                    return Response({"detail": "过期时长必须为正整数。"}, status=status.HTTP_400_BAD_REQUEST)
+                expire_time = now() + timedelta(minutes=expire_duration)
+            except (ValueError, TypeError):
+                return Response({"detail": "无效的过期时长。"}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # 如果未指定时长，检查是否传递具体时间
+            expire_time_input = request.data.get('expire_time', None)
+            if expire_time_input:
+                try:
+                    expire_time = make_aware(datetime.fromisoformat(expire_time_input))
+                    if expire_time <= now():
+                        return Response({"detail": "过期时间必须大于当前时间。"}, status=status.HTTP_400_BAD_REQUEST)
+                except ValueError:
+                    return Response({"detail": "无效的时间格式，应为 ISO 格式。"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 如果未提供时长和时间，使用默认值（例如 24 小时）
+        if not expire_time:
+            expire_time = now() + timedelta(hours=24)
+
+        # 准备序列化数据
+        data = request.data.copy()
+        data['expire_time'] = expire_time  # 设置计算后的过期时间
 
         # 序列化并保存
-        serializer = ShareLinkSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()  # 保存并创建ShareLink
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        print(serializer.errors)  # 打印错误信息
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = ShareLinkSerializer(data=data)
+        if not serializer.is_valid():
+            print("Serializer Errors:", serializer.errors)  # 打印序列化错误
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer.save()  # 保存并创建 ShareLink
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 # 通过分享链接访问图片
