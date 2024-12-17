@@ -18,6 +18,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Image, ShareLink, Tag
 from .serializers import ImageSerializer, ImageDetailSerializer, ShareLinkSerializer, TagSerializer
+from .tools.pagination import CustomPagination
 
 import uuid
 import logging
@@ -25,12 +26,6 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
-
-
-class CustomPagination(PageNumberPagination):
-    page_size = 16  # 每页显示12张图片
-    page_size_query_param = 'page_size'  # 可通过查询参数控制每页大小
-    max_page_size = 100  # 最大支持100条数据
 
 
 # 图片标签
@@ -137,8 +132,10 @@ class UserImageListView(APIView):
         if tag_ids:
             images = images.filter(tags__id__in=tag_ids).distinct()
 
-        serializer = ImageSerializer(images, many=True)
-        return Response(serializer.data)
+        paginator = CustomPagination()
+        paginated_images = paginator.paginate_queryset(images, request)
+        serializer = ImageSerializer(paginated_images, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
 
 # 获取图片详情
@@ -307,25 +304,16 @@ class AccessShareLinkView(APIView):
 
 
 # 管理分享链接
-# 分页类
-class ShareLinkPagination(PageNumberPagination):
-    page_size = 5  # 默认每页5条数据
-    page_size_query_param = 'page_size'  # 可通过 query 参数指定每页条数
-    max_page_size = 100  # 最大每页条数
-
 
 class ManageShareLinksView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         # 获取当前用户的所有分享链接，确保分享链接不重复
-        share_links = ShareLink.objects.filter(images__uploaded_by=request.user).distinct()
-
-        # 过滤掉已过期的分享链接
-        share_links = share_links.filter(expire_time__gte=timezone.now())
-
+        share_links = ShareLink.objects.filter(images__uploaded_by=request.user).order_by(
+            '-expire_time', 'created_time').distinct()
         # 分页处理
-        paginator = ShareLinkPagination()
+        paginator = CustomPagination()
         paginated_share_links = paginator.paginate_queryset(share_links, request)
 
         # 序列化分页后的分享链接数据
@@ -340,16 +328,32 @@ class ManageShareLinksView(APIView):
         # 从请求体中获取 share_codes
         share_codes = request.data.get('share_codes', [])
         if not share_codes:
-            return Response({"detail": "No share codes provided."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "未提供分享code"}, status=status.HTTP_400_BAD_REQUEST)
 
         # 获取所有要删除的分享链接
         share_links = ShareLink.objects.filter(share_code__in=share_codes, images__uploaded_by=request.user)
 
         if not share_links:
-            return Response({"detail": "No valid share links found or permission denied."},
-                            status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "无效的分享链接"}, status=status.HTTP_404_NOT_FOUND)
 
         # 批量删除
         share_links.delete()
+        return Response({"detail": "分享链接已删除"}, status=status.HTTP_204_NO_CONTENT)
 
-        return Response({"detail": "Share links deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+    def post(self, request):
+        """
+        作废指定的分享链接
+        """
+        share_codes = request.data.get('share_codes', [])
+        if not share_codes:
+            return Response({"detail": "未提供分享code"}, status=status.HTTP_400_BAD_REQUEST)
+
+        share_links = ShareLink.objects.filter(share_code__in=share_codes, images__uploaded_by=request.user)
+        if not share_links:
+            return Response({"detail": "无效的分享链接"},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        # 将过期时间设置为当前时间以作废链接
+        share_links.update(expire_time=timezone.now())
+
+        return Response({"detail": "分享链接已作废"}, status=status.HTTP_200_OK)
