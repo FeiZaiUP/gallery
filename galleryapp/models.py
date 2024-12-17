@@ -40,6 +40,10 @@ class ShareLink(models.Model):
     is_protected = models.BooleanField(default=False)
     password = models.CharField(max_length=128, blank=True, null=True)  # 可选的保护密码
     expire_time = models.DateTimeField()  # 默认1天有效
+    created_time = models.DateTimeField(auto_now_add=True)  # 创建时间
+
+    class Meta:
+        ordering = ['-expire_time', 'created_time']
 
     def is_expired(self):
         return timezone.now() > self.expire_time
