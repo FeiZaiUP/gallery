@@ -127,7 +127,7 @@ class UserImageListView(APIView):
         tag_ids = request.query_params.getlist('tags', [])
 
         # 获取当前用户的图片
-        images = Image.objects.filter(uploaded_by=request.user)  # 只返回当前用户的图片
+        images = Image.objects.filter(uploaded_by=request.user).order_by('created_at')  # 只返回当前用户的图片
         # 如果用户选择了标签，进行过滤，确保只查看当前用户的标签
         if tag_ids:
             images = images.filter(tags__id__in=tag_ids).distinct()
