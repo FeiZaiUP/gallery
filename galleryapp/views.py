@@ -53,7 +53,6 @@ class ImageUploadView(APIView):
 
     def post(self, request):
         # 仅接受 title 和 file、tags 字段上传
-
         # 获取标签ID列表，如果未提供则默认为空
         tags = request.data.get('tags', [])
         # 确保 tags 是一个列表，即使前端传递多个值
@@ -80,18 +79,23 @@ class ImageUploadView(APIView):
         else:
             valid_tags = []  # 如果未提供 tags，则设置为空列表
 
-        serializer = ImageSerializer(data=request.data)
-        if serializer.is_valid():
-            image = serializer.save(uploaded_by=request.user)  # 关联当前用户
+        # 批量上传 批量处理文件
+        files = request.FILES.getlist('file')  # 获取上传的文件列表
+        if not files:
+            return Response({'detail': '未上传任何文件。'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # 获取用户的标签列表，确保只能为当前用户创建的标签关联
-            user_tags = Tag.objects.filter(uploaded_by=request.user)
-            valid_tags = user_tags.filter(id__in=tags)  # 确保标签是当前用户创建的
-            image.tags.set(valid_tags)
+        uploaded_images = []
+        for file in files:
+            serializer = ImageSerializer(
+                data={'file': file, 'title': request.data.get('title')})
+            if serializer.is_valid():
+                image = serializer.save(uploaded_by=request.user)
+                image.tags.set(valid_tags)
+                uploaded_images.append(serializer.data)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'uploaded_images': uploaded_images}, status=status.HTTP_201_CREATED)
 
 
 class BulkDeleteImagesView(APIView):
@@ -126,16 +130,41 @@ class UserImageListView(APIView):
         # 获取标签过滤参数
         tag_ids = request.query_params.getlist('tags', [])
 
-        # 获取当前用户的图片
-        images = Image.objects.filter(uploaded_by=request.user).order_by('created_at')  # 只返回当前用户的图片
-        # 如果用户选择了标签，进行过滤，确保只查看当前用户的标签
-        if tag_ids:
-            images = images.filter(tags__id__in=tag_ids).distinct()
+        keyword = request.query_params.get('keyword', '')  # 获取搜索关键字
 
-        paginator = CustomPagination()
-        paginated_images = paginator.paginate_queryset(images, request)
-        serializer = ImageSerializer(paginated_images, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        try:
+            images = Image.objects.filter(uploaded_by=request.user).order_by('-created_at')
+
+            # 模糊搜索标题
+            if keyword:
+                logger.info(f"搜索关键词: {keyword}")
+                images = images.filter(title__icontains=keyword)
+
+            if tag_ids:
+                images = images.filter(tags__id__in=tag_ids).distinct()
+
+            paginator = CustomPagination()
+            paginated_images = paginator.paginate_queryset(images, request)
+            serializer = ImageSerializer(paginated_images, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            logger.error(f"图片查询失败: {e}")
+            return Response({'error': '服务器内部错误，请稍后重试'}, status=500)
+        # # 模糊搜索标题
+        # if keyword:
+        #     images = images.filter(title__icontains=keyword)
+        #
+        # # 获取当前用户的图片
+        # images = Image.objects.filter(uploaded_by=request.user).order_by('-created_at')  # 只返回当前用户的图片
+        # # 如果用户选择了标签，进行过滤，确保只查看当前用户的标签
+        # if tag_ids:
+        #     images = images.filter(tags__id__in=tag_ids).distinct()
+        #
+        # paginator = CustomPagination()
+        # paginated_images = paginator.paginate_queryset(images, request)
+        # serializer = ImageSerializer(paginated_images, many=True)
+        # return paginator.get_paginated_response(serializer.data)
 
 
 # 获取图片详情

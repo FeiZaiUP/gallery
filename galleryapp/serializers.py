@@ -32,7 +32,7 @@ class ImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Image
         fields = ['id', 'title', 'file', 'created_at', 'tags']  # 只展示必要的字段
-        read_only_fields = ['uploaded_by', 'created_at']  # id 和 created_at 不允许修改
+        read_only_fields = ['id', 'uploaded_by', 'created_at']  # id 和 created_at 不允许修改
 
     def validate_description(self, value):
         if not value:
