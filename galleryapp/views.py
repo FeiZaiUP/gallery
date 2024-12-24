@@ -150,7 +150,7 @@ class UserImageListView(APIView):
 
         except Exception as e:
             logger.error(f"图片查询失败: {e}")
-            return Response({'error': '服务器内部错误，请稍后重试'}, status=500)
+            return Response({'error': '系统错误，请稍后重试'}, status=500)
         # # 模糊搜索标题
         # if keyword:
         #     images = images.filter(title__icontains=keyword)
@@ -177,7 +177,7 @@ class ImageDetailView(APIView):
         if image:
             serializer = ImageDetailSerializer(image)
             return Response(serializer.data)
-        return Response({"detail": "图片未找到或者您没有权限。"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"detail": "图片未找到或者您没有权限"}, status=status.HTTP_404_NOT_FOUND)
 
 
 # 图片信息编辑

@@ -27,7 +27,6 @@ DEBUG = True
 # ALLOWED_HOSTS = []
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.1.175', '0.0.0.0']
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -62,10 +61,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://192.168.1.175:8000',  # 后端地址
 ]
 
-
 # 如果需要允许所有跨域请求（仅限开发阶段）
 CORS_ALLOW_ALL_ORIGINS = True
-
 
 # 如果需要，你还可以允许特定的请求头
 CORS_ALLOW_HEADERS = [
@@ -154,6 +151,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
+import os
+
 LANGUAGE_CODE = 'zh-hans'
 
 TIME_ZONE = 'Asia/Shanghai'  # 设置为中国的标准时间
@@ -164,13 +163,15 @@ USE_I18N = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
-
-import os
+STATIC_URL = '/static/'
+# 静态文件收集的根目录
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # 你可以根据需要设置你的静态文件路径
 MEDIA_URL = '/media/'  # 用于访问媒体文件的 URL 路径
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # 静态文件存储的根目录
+
+DEFAULT_AVATAR_URL = '/media/default/avatar.png'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
